@@ -12,6 +12,7 @@ Order to work in:
 from __future__ import annotations
 
 import torch
+from bench.timing import gpu_timer   # at the top of the file
 
 
 # --------------------------------------------------------------------------- #
@@ -38,19 +39,30 @@ def sample(
     Check: logits [2, 1, 0] at temperature 1 must give probabilities
     [0.665, 0.245, 0.090].
     """
-    # TODO
-    raise NotImplementedError
+    if temperature == 0:
+        return int(torch.argmax(logits).item())
+    logits = logits.clone().float()   # never mutate the caller's tensor
+    neg_inf = float("-inf")
+    if top_p is not None and top_p < 1.0:
+        probs = softmax_probs(logits, temperature)
+        sorted_probs, sorted_indices = torch.sort(probs, descending=True)
+        cum = torch.cumsum(sorted_probs, dim=0)  
+        cum_before = cum - sorted_probs
+        remove = cum_before >= top_p  
+        logits[sorted_indices[remove]] = neg_inf
+    if top_k is not None and top_k < logits.numel():
+        threshold = torch.topk(logits, top_k).values[-1]
+        logits = logits.masked_fill(logits < threshold, neg_inf)
 
-
+    probs = softmax_probs(logits, temperature)
+    return int(torch.multinomial(probs, 1, generator=generator).item())
 def softmax_probs(logits: torch.Tensor, temperature: float) -> torch.Tensor:
     """Helper you may want: float32 softmax with temperature. Exposed so the
     tests can check your numbers against the table in section 1.4."""
-    # TODO
-    raise NotImplementedError
-
-
-# --------------------------------------------------------------------------- #
-# 2. Naive loop: rerun the whole sequence every step
+    p = logits.float() / temperature
+    p = p - p.max()
+    z = torch.exp(p)
+    return z / z.sum()
 # --------------------------------------------------------------------------- #
 @torch.no_grad()
 def generate_naive(
@@ -69,9 +81,18 @@ def generate_naive(
     If step_times is a list, append the wall time of each step to it
     (use bench.timing.gpu_timer so the numbers are real).
     """
-    # TODO
-    raise NotImplementedError
-
+    input_ids = input_ids.clone()
+    for _ in range(max_new_tokens):
+        with gpu_timer(step_times):
+            out = model(input_ids, use_cache=False)
+            logits = out.logits[0, -1]
+            next_id = sample(logits, temperature=temperature)
+            input_ids = torch.cat(
+                [input_ids, torch.tensor([[next_id]], device=input_ids.device)], dim=1
+            )
+        if eos_token_id is not None and next_id == eos_token_id:
+            break
+    return input_ids
 
 # --------------------------------------------------------------------------- #
 # 3. Cached loop: feed only the new token, reuse past_key_values
@@ -96,5 +117,29 @@ def generate_cached(
     Under temperature=0 this must produce exactly the same tokens as
     generate_naive. That equality is your correctness test.
     """
-    # TODO
-    raise NotImplementedError
+    ids = input_ids.clone()          # the full sequence we return
+    device = ids.device
+
+    with gpu_timer(ttft):
+        out = model(ids, use_cache=True)
+        cache = out.past_key_values
+        logits = out.logits[0, -1]
+        next_id = sample(logits, temperature=temperature)
+        ids = torch.cat([ids, torch.tensor([[next_id]], device=device)], dim=1)
+    if eos_token_id is not None and next_id == eos_token_id:
+        return ids
+    
+    for _ in range(max_new_tokens - 1):
+        with gpu_timer(step_times):
+            out = model(
+                torch.tensor([[next_id]], device=device),
+                past_key_values=cache,
+                use_cache=True,
+            )
+            cache = out.past_key_values
+            logits = out.logits[0, -1]
+            next_id = sample(logits, temperature=temperature)
+            ids = torch.cat([ids, torch.tensor([[next_id]], device=device)], dim=1)
+        if eos_token_id is not None and next_id == eos_token_id:
+            break
+    return ids

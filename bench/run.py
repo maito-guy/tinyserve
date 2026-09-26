@@ -56,8 +56,28 @@ def run_one(mode: str, model, ids: torch.Tensor, out_len: int) -> dict:
         raise ValueError(mode)
 
     # TODO: compute the metrics from `steps` and `ttft`
-    raise NotImplementedError
+    if mode == "naive":
+        ttft_s = steps[0]
+        itl = steps[1:]
+        all_steps = steps
+    else:  # cached
+        ttft_s = ttft[0]
+        itl = steps
+        all_steps = ttft + steps
 
+    n_tokens = len(all_steps)          # one token per entry, prefill included
+    total_s = sum(all_steps)
+    pc = percentiles(itl)
+
+    return {
+        "mode": mode,
+        "ttft_ms": ttft_s * 1000,
+        "itl_mean_ms": pc["mean"] * 1000,
+        "itl_p50_ms": pc["p50"] * 1000,
+        "itl_p99_ms": pc["p99"] * 1000,
+        "tokens_per_s": n_tokens / total_s,
+        "steps_ms": [s * 1000 for s in all_steps],
+    }
 
 def plot(results: list[dict], path: Path) -> None:
     import matplotlib

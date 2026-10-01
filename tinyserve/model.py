@@ -115,8 +115,11 @@ def rms_norm(x: torch.Tensor, g: torch.Tensor, eps: float) -> torch.Tensor:
     multiply by g. Worked check: x=[3,4], g=[1,1], eps=0 -> [0.849, 1.131].
     Hint: mean over the last dim with keepdim=True, and torch.rsqrt.
     """
-    # TODO
-    raise NotImplementedError
+    Dtype = x.dtype
+    x = x.float()
+    mean_sq = x.pow(2).mean(dim=-1, keepdim=True)
+    x = x * torch.rsqrt(mean_sq + eps)
+    return (x * g).to(Dtype)
 
 
 # --------------------------------------------------------------------------- #

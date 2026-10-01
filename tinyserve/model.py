@@ -270,8 +270,9 @@ def block(
         x = x + attention( rms_norm(x, attn_norm) )
         x = x + mlp( rms_norm(x, mlp_norm) )
     """
-    # TODO
-    raise NotImplementedError
+    x = x + attention(rms_norm(x, W[f"{i}.attn_norm"], cfg.eps), W, i, cfg, cos, sin, cache, start_pos)
+    x = x + mlp(rms_norm(x, W[f"{i}.mlp_norm"], cfg.eps), W, i)
+    return x
 
 
 # --------------------------------------------------------------------------- #
@@ -301,8 +302,19 @@ def forward(
     The layer-by-layer test compares it with Hugging Face's hidden states,
     so when something is wrong it tells you the first layer that drifts.
     """
-    # TODO
-    raise NotImplementedError
+    T = ids.shape[0]
+    x = W["embed"][ids]  # [T, d]
+    positions = torch.arange(start_pos, start_pos + T, device=ids.device)
+    cos, sin = rope_cos_sin(positions, cfg.d_head, cfg.rope_theta)
+    hidden = [x]
+    for i in range(cfg.L):
+        x = block(x, W, i, cfg, cos, sin, cache, start_pos)
+        hidden.append(x)
+    x = rms_norm(x, W["final_norm"], cfg.eps)
+    logits = x @ W["lm_head"].T
+    if return_hidden:
+        return logits, hidden
+    return logits
 
 
 # --------------------------------------------------------------------------- #

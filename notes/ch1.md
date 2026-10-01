@@ -11,21 +11,4 @@
 
 ## Measurements
 
-| run | prompt | out | TTFT ms | ITL p50 ms | ITL p99 ms | tok/s |
-| --- | --- | --- | --- | --- | --- | --- |
-| naive  | 512 | 256 | | | | |
-| cached | 512 | 256 | | | | |
-
-## Characters per token (step 2)
-
-| prompt | chars | tokens | chars/token |
-| --- | --- | --- | --- |
-| short English question | | | |
-| English paragraph | | | |
-| same paragraph, Arabic | | | |
-| Python function | | | |
-| table of numbers | | | |
-
-## What surprised me
-
-(two paragraphs, same day)
+I predicted naive steps would grow 1.5× and the cache would give a huge speed-up. Instead naive was nearly flat and the cache only doubled throughput. Cached decode ran at 33 ms per token, 10× slower than the bandwidth bound. My guess: a fixed per-step overhead (~30 ms) dominates both loops on a model this small, so removing work barely shows. Chapter 3 should explain this.

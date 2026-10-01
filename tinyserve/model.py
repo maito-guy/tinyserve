@@ -140,9 +140,11 @@ def rope_cos_sin(
     paired with dimension j + d_head/2 (not with j+1), so both halves need
     the same angles. Hint: torch.arange(0, d_head, 2) / d_head gives 2i/d_head.
     """
-    # TODO
-    raise NotImplementedError
-
+    i = torch.arange(0, d_head, 2).float()
+    inv_freq = 1.0 / (theta ** (i / d_head))
+    angles = positions.float()[:, None] * inv_freq[None, :]   # [T, d_head/2]
+    angles = torch.cat([angles, angles], dim=-1)
+    return torch.cos(angles), torch.sin(angles)
 
 def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.Tensor:
     """x: [n_heads, T, d_head], cos/sin: [T, d_head]  ->  same shape as x.
@@ -154,8 +156,10 @@ def apply_rope(x: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor) -> torch.T
     (cos and sin broadcast over the heads dimension automatically.)
     Check: at position 0, cos=1 and sin=0, so x must come back unchanged.
     """
-    # TODO
-    raise NotImplementedError
+    half = x.shape[-1] // 2
+    x1, x2 = x[..., :half], x[..., half:]
+    rotated = torch.cat([-x2, x1], dim=-1)
+    return x * cos + rotated * sin
 
 
 # --------------------------------------------------------------------------- #

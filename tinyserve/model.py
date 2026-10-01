@@ -173,9 +173,10 @@ def mlp(x: torch.Tensor, W: dict, i: int) -> torch.Tensor:
     Weights: W[f"{i}.gate"], W[f"{i}.up"], W[f"{i}.down"]. No biases.
     torch.nn.functional.silu exists; use it.
     """
-    # TODO
-    raise NotImplementedError
-
+    gate = x @ W[f"{i}.gate"].T
+    up = x @ W[f"{i}.up"].T
+    h = torch.nn.functional.silu(gate) * up
+    return h @ W[f"{i}.down"].T
 
 # --------------------------------------------------------------------------- #
 # 4. Attention and the block (sections 2.2, 2.4, 2.5)

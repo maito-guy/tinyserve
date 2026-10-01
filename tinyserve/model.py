@@ -223,10 +223,38 @@ def attention(
     this is the one function in the book you should be able to write on a
     whiteboard.
     """
-    # TODO
-    raise NotImplementedError
+    T = x.shape[0]
+    q = x @ W[f"{i}.q_w"].T + W[f"{i}.q_b"]
+    k = x @ W[f"{i}.k_w"].T + W[f"{i}.k_b"]
+    v = x @ W[f"{i}.v_w"].T + W[f"{i}.v_b"]
+    q = q.view(T, cfg.h, cfg.d_head).transpose(0, 1)  # [h, T, d_head]
+    k = k.view(T, cfg.n_kv, cfg.d_head).transpose(0, 1)  # [n_kv, T, d_head]
+    v = v.view(T, cfg.n_kv, cfg.d_head).transpose(0, 1)  # [n_kv, T, d_head]
+    q = apply_rope(q, cos, sin)
+    k = apply_rope(k, cos, sin)
+    if cache is not None:
+        cache.write(i, start_pos, k, v)
+        k, v = cache.read(i, start_pos + T) 
+    group = cfg.h // cfg.n_kv                   # 14 // 2 = 7
+    k = k.repeat_interleave(group, dim=0)       # [14, S, 64]
+    v = v.repeat_interleave(group, dim=0)       # [14, S, 64]
 
+    # 6. scores: every query against every key, per head
+    scores = q @ k.transpose(-1, -2) / math.sqrt(cfg.d_head)    # [14, T, S]
 
+    # 7. causal mask: block keys that come after the query
+    S = k.shape[1]
+    q_pos = start_pos + torch.arange(T, device=x.device)        # [T]
+    k_pos = torch.arange(S, device=x.device)                    # [S]
+    mask = k_pos[None, :] > q_pos[:, None]                       # [T, S], True = blocked
+    scores = scores.masked_fill(mask, float("-inf"))  # [14, T, S]
+    # 8. softmax over the keys, in float32
+    probs = torch.softmax(scores.float(), dim=-1).to(v.dtype)
+
+    # 9. blend values, glue heads back, output projection
+    out = probs @ v                                              # [14, T, 64]
+    out = out.transpose(0, 1).reshape(T, cfg.h * cfg.d_head)     # [T, 896]
+    return out @ W[f"{i}.o_w"].T
 def block(
     x: torch.Tensor,
     W: dict,

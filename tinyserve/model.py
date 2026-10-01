@@ -340,14 +340,17 @@ class KVCache:
     def write(self, layer: int, start_pos: int, k: torch.Tensor, v: torch.Tensor) -> None:
         """k, v: [n_kv, T, d_head]. Store them at positions start_pos .. start_pos+T-1
         of this layer. One slice assignment each."""
-        # TODO
-        raise NotImplementedError
+        T = k.shape[1]
+        self.data[layer, 0, :, start_pos : start_pos + T, :] = k
+        self.data[layer, 1, :, start_pos : start_pos + T, :] = v
 
     def read(self, layer: int, end: int) -> tuple[torch.Tensor, torch.Tensor]:
         """Return (k, v) for positions 0 .. end-1 of this layer, each
         [n_kv, end, d_head]. Slices, not copies."""
-        # TODO
-        raise NotImplementedError
+        return (
+            self.data[layer, 0, :, :end, :],
+            self.data[layer, 1, :, :end, :],
+        )
 
     @property
     def nbytes(self) -> int:

@@ -56,9 +56,10 @@ def main():
     warmup(lambda: time_hf(model, ids[:16], 4))
     warmup(lambda: time_mine(ids[:16], W, cfg, 4))
 
-    report("Hugging Face", *time_hf(model, ids, args.out_len))
-    report("mine", *time_mine(ids, W, cfg, args.out_len))
-
+    for r in range(3):
+        print(f"--- round {r + 1}")
+        report("Hugging Face", *time_hf(model, ids, args.out_len))
+        report("mine", *time_mine(ids, W, cfg, args.out_len))
 
 if __name__ == "__main__":
     main()

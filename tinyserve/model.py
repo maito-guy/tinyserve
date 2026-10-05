@@ -119,8 +119,7 @@ def rms_norm(x: torch.Tensor, g: torch.Tensor, eps: float) -> torch.Tensor:
     x = x.float()
     mean_sq = x.pow(2).mean(dim=-1, keepdim=True)
     x = x * torch.rsqrt(mean_sq + eps)
-    return (x * g).to(Dtype)
-
+    return x.to(Dtype) * g
 
 # --------------------------------------------------------------------------- #
 # 2. RoPE (section 2.6)
@@ -306,6 +305,7 @@ def forward(
     x = W["embed"][ids]  # [T, d]
     positions = torch.arange(start_pos, start_pos + T, device=ids.device)
     cos, sin = rope_cos_sin(positions, cfg.d_head, cfg.rope_theta)
+    cos, sin = cos.to(x.dtype), sin.to(x.dtype)      # <-- this line
     hidden = [x]
     for i in range(cfg.L):
         x = block(x, W, i, cfg, cos, sin, cache, start_pos)

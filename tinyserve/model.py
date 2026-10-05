@@ -140,7 +140,7 @@ def rope_cos_sin(
     paired with dimension j + d_head/2 (not with j+1), so both halves need
     the same angles. Hint: torch.arange(0, d_head, 2) / d_head gives 2i/d_head.
     """
-    i = torch.arange(0, d_head, 2).float()
+    i = torch.arange(0, d_head, 2, device=positions.device).float()    
     inv_freq = 1.0 / (theta ** (i / d_head))
     angles = positions.float()[:, None] * inv_freq[None, :]   # [T, d_head/2]
     angles = torch.cat([angles, angles], dim=-1)
